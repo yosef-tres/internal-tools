@@ -161,7 +161,9 @@ print_info "Or simply restart your terminal."
 
 # Source the utilities in the current shell if interactive
 if [[ $- == *i* ]]; then
-  source "${UTILS_DIR}/docker-utils.zsh"
+  for util_file in "${UTILS_DIR}"/*-utils.zsh; do
+    source "$util_file"
+  done
   print_success "ZSH Tools loaded in the current shell."
-  print_info "Try running 'd' to see available Docker commands."
+  print_info "Try using any of the loaded utility commands."
 fi

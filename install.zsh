@@ -79,33 +79,56 @@ if [ "$LOCAL_INSTALL" = false ]; then
   # GitHub repo details
   GITHUB_OWNER="yosef-tres"
   GITHUB_REPO_NAME="zsh-tools"
-  GITHUB_PATH="utils"
+  TEMP_DIR=$(mktemp -d)
   
-  # Use GitHub API to get contents of the utils directory
-  print_info "Retrieving utility files list from GitHub..."
-  if command -v curl >/dev/null 2>&1; then
-    # Get directory listing with curl and extract filenames ending with -utils.zsh
-    # This will work even without authentication for public repos
-    FILES_JSON=$(curl -s "https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO_NAME}/contents/${GITHUB_PATH}")
-    
-    # Make sure we got a valid response
-    if echo "$FILES_JSON" | grep -q "name"; then
-      print_info "Found utility files, downloading..."
-      
-      # Extract filenames and download each one
-      echo "$FILES_JSON" | grep -o '"name":"[^"]*-utils\.zsh"' | cut -d '"' -f 4 | while read -r file; do
-        print_info "Downloading $file..."
-        if download_file "${GITHUB_REPO}/utils/${file}" "${UTILS_DIR}/${file}" 2>/dev/null; then
-          print_success "Downloaded $file"
-          DOWNLOAD_SUCCESS=true
-        fi
-      done
+  # Method 1: Try git clone (fastest and most reliable)
+  if command -v git >/dev/null 2>&1; then
+    print_info "Using git to download files..."
+    if git clone --depth=1 "https://github.com/${GITHUB_OWNER}/${GITHUB_REPO_NAME}.git" "$TEMP_DIR" >/dev/null 2>&1; then
+      # Copy just the utils directory
+      if [ -d "${TEMP_DIR}/utils" ]; then
+        cp -r "${TEMP_DIR}/utils"/* "${UTILS_DIR}/"
+        print_success "Successfully downloaded utility files using git"
+        DOWNLOAD_SUCCESS=true
+      else
+        print_warning "Utils directory not found in the repository"
+      fi
     else
-      print_warning "Could not retrieve utils directory listing from GitHub API. Response: ${FILES_JSON}"
+      print_warning "Git clone failed, trying alternative method"
+    fi
+  # Method 2: Try downloading ZIP file
+  elif command -v curl >/dev/null 2>&1; then
+    print_info "Using curl to download repository ZIP..."
+    ZIP_URL="https://github.com/${GITHUB_OWNER}/${GITHUB_REPO_NAME}/archive/refs/heads/main.zip"
+    ZIP_FILE="${TEMP_DIR}/repo.zip"
+    
+    if curl -sL "$ZIP_URL" -o "$ZIP_FILE"; then
+      # Check if unzip is available
+      if command -v unzip >/dev/null 2>&1; then
+        print_info "Extracting ZIP file..."
+        unzip -q "$ZIP_FILE" -d "$TEMP_DIR"
+        # Find the extracted directory (it might have a suffix like -main)
+        EXTRACT_DIR=$(find "$TEMP_DIR" -type d -name "${GITHUB_REPO_NAME}*" | head -n 1)
+        
+        if [ -d "${EXTRACT_DIR}/utils" ]; then
+          cp -r "${EXTRACT_DIR}/utils"/* "${UTILS_DIR}/"
+          print_success "Successfully downloaded utility files using ZIP"
+          DOWNLOAD_SUCCESS=true
+        else
+          print_warning "Utils directory not found in the ZIP file"
+        fi
+      else
+        print_warning "unzip command not available, falling back to local install"
+      fi
+    else
+      print_warning "Failed to download ZIP file"
     fi
   else
-    print_warning "curl not available, falling back to local install method"
+    print_warning "Neither git nor curl available, falling back to local install method"
   fi
+  
+  # Clean up temp directory
+  rm -rf "$TEMP_DIR"
 fi
 
 # If GitHub download failed or we're running locally

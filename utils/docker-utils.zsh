@@ -1,7 +1,7 @@
 #!/bin/zsh
 
 # Docker utility function
-# Usage: d <cmd> [docker_container]
+# Usage: d <cmd> [docker_container] [additional_flags...]
 # Commands:
 #  e - execute bash/sh inside container
 #  l - display pretty logs
@@ -12,10 +12,16 @@
 #  r - restart container
 #  t - start container
 #  ps - list containers with status (use -a to show stopped containers)
+#
+# Additional flags can be appended to any command and will be passed to the docker command
+# Examples:
+#  d u -d             # docker compose up -d
+#  d d --volumes      # docker compose down --volumes
+
 d() {
   # Check if command argument is provided
   if [[ -z $1 ]]; then
-    echo "Usage: d <cmd> [docker_container]"
+    echo "Usage: d <cmd> [docker_container] [additional_flags...]"
     echo "Commands:"
     echo "  e - (e)xecute bash/sh inside container"
     echo "  l - display pretty (l)ogs"
@@ -26,36 +32,43 @@ d() {
     echo "  r - (r)estart container"
     echo "  t - s(t)art container"
     echo "  ps - list containers with status (use -a to show stopped containers)"
+    echo ""
+    echo "You can append additional flags to any command, for example:"
+    echo "  d u -d             # docker compose up -d"
+    echo "  d d --volumes      # docker compose down --volumes"
     return 1
   fi
 
   local cmd=$1
-  local container_pattern=$2
+  shift  # Remove the command from args
+  
+  # Initialize container_pattern as empty
+  local container_pattern=""
+  local additional_flags=()
+  
+  # If we have more arguments, check if the first one is a flag (starts with -)
+  if [[ $# -gt 0 ]]; then
+    if [[ "$1" == -* ]]; then
+      # If it's a flag, all args are flags
+      additional_flags=("$@")
+    else
+      # First arg is container pattern, rest are flags
+      container_pattern=$1
+      shift  # Remove container pattern from args
+      
+      if [[ $# -gt 0 ]]; then
+        additional_flags=("$@")
+      fi
+    fi
+  fi
   local containers=()
   local cmd_str=""
 
-  # Function to find docker-compose.yml (only needed for up/down commands)
-  find_compose_file() {
-    local compose_file=""
-    local current_dir=$PWD
-    while [[ "$current_dir" != "" ]]; do
-      if [[ -f "$current_dir/docker-compose.yml" ]]; then
-        compose_file="$current_dir/docker-compose.yml"
-        break
-      elif [[ -f "$current_dir/compose.yml" ]]; then
-        compose_file="$current_dir/compose.yml"
-        break
-      fi
-      current_dir=${current_dir%/*}
-    done
-    echo "$compose_file"
-  }
-
   # Function to get docker container based on pattern
   get_docker_container() {
-    local pattern=$1
     local containers=()
     local selected_container=""
+    local pattern=$1
     
     # Get container list from docker
     if [[ -n "$pattern" ]]; then
@@ -103,45 +116,50 @@ d() {
   # Function to get service from docker-compose
   get_compose_service() {
     local pattern=$1
-    local containers=()
-    local selected_container=""
+    local services=()
+    local selected_service=""
     
-    # Get list of available services from docker-compose
-    if [[ -n "$pattern" ]]; then
-      # If pattern provided, filter services
-      containers=($(docker compose ps --services | grep -i "$pattern"))
-    else
-      # If no pattern provided, get all services
-      containers=($(docker compose ps --services))
+    # Primary method: Use docker compose config --services
+    # This is the most reliable way to get all services defined in the compose file
+    if command -v docker >/dev/null 2>&1; then
+      # Change to the directory containing the compose file
+      local current_dir=$(pwd)
+      if [[ -n "$pattern" ]]; then
+        # If pattern provided, filter services
+        services=($(docker compose config --services 2>/dev/null | grep -i "$pattern"))
+      else
+        # If no pattern provided, get all services
+        services=($(docker compose config --services 2>/dev/null))
+      fi
     fi
-
+    
     # Check if any services were found
-    if [[ ${#containers[@]} -eq 0 ]]; then
+    if [[ ${#services[@]} -eq 0 ]]; then
       echo "No services found matching '$pattern'"
       return 1
     fi
 
     # If multiple services found, show menu
-    if [[ ${#containers[@]} -gt 1 ]]; then
+    if [[ ${#services[@]} -gt 1 ]]; then
       echo "Multiple services found. Please select one:"
-      select container in "${containers[@]}"; do
-        if [[ -n "$container" ]]; then
-          selected_container=$container
+      select service in "${services[@]}"; do
+        if [[ -n "$service" ]]; then
+          selected_service=$service
           break
         fi
       done
     else
       # If only one service found
-      selected_container=${containers[1]}
+      selected_service=${services[1]}
     fi
 
     # Validate service selection
-    if [[ -z "$selected_container" ]]; then
+    if [[ -z "$selected_service" ]]; then
       echo "No service selected"
       return 1
     fi
     
-    echo "$selected_container"
+    echo "$selected_service"
   }
 
   # Execute the appropriate command based on the option
@@ -151,8 +169,9 @@ d() {
       local selected_container
       selected_container=$(get_docker_container "$container_pattern") || return 1
       
-      cmd_str="docker exec -it $selected_container sh -c 'if command -v bash >/dev/null; then bash; else sh; fi'"
-      eval $cmd_str
+      cmd_str="docker exec -it $selected_container ${additional_flags[@]} sh -c 'if command -v bash >/dev/null; then bash; else sh; fi'"
+      
+      eval "$cmd_str"
       ;;
     l)
       # Get container selection first, silently
@@ -161,7 +180,7 @@ d() {
       
       # Get logs into a temporary file first
       local tmpfile=$(mktemp)
-      docker logs --tail=100 "$selected_container" > "$tmpfile" 2>/dev/null
+      docker logs --tail=100 ${additional_flags[@]} "$selected_container" > "$tmpfile" 2>/dev/null
       
       # Add timestamps to each line
       while IFS= read -r line; do
@@ -178,7 +197,7 @@ d() {
       
       # Use direct command with proper quoting
       # For follow mode we can't use a temp file, so we pipe directly
-      docker logs -f --tail=100 "$selected_container" 2>/dev/null | while IFS= read -r line; do
+      docker logs -f --tail=100 ${additional_flags[@]} "$selected_container" 2>/dev/null | while IFS= read -r line; do
         printf "%s %s\n" "$(date +"%H:%M:%S")" "$line"
       done
       ;;
@@ -189,51 +208,54 @@ d() {
       
       echo "Stopping container $selected_container..."
       # Stop the container
-      docker stop "$selected_container"
+      cmd_str="docker stop ${additional_flags[@]} \"$selected_container\""
+      eval "$cmd_str"
       ;;
     r)
       # Get container selection first, silently
       local selected_container
       selected_container=$(get_docker_container "$container_pattern") || return 1
       
-      docker restart "$selected_container"
+      cmd_str="docker restart ${additional_flags[@]} \"$selected_container\""
+      eval "$cmd_str"
       ;;
     t)
       # Get container selection first, silently
       local selected_container
       selected_container=$(get_docker_container "$container_pattern") || return 1
       
-      docker start "$selected_container"
+      cmd_str="docker start ${additional_flags[@]} \"$selected_container\""
+      
+      eval "$cmd_str"
       ;;
     d)
-      # Find docker-compose.yml (required for down command)
-      local compose_file
-      compose_file=$(find_compose_file)
-      if [[ -z "$compose_file" ]]; then
-        echo "Error: No docker-compose.yml or compose.yml found in current directory or parent directories."
-        return 1
+      
+      # If no container pattern, down all services
+      if [[ -z "$container_pattern" ]]; then
+        cmd_str="docker compose down ${additional_flags[@]}"
+        eval "$cmd_str"
+      else
+        # Otherwise get specific service
+        local selected_service
+        selected_service=$(get_compose_service "$container_pattern") || return 1
+        
+        cmd_str="docker compose down $selected_service ${additional_flags[@]}"
+        eval "$cmd_str"
       fi
-      
-      local selected_service
-      selected_service=$(get_compose_service "$container_pattern") || return 1
-      
-      cmd_str="docker compose down $selected_service"
-      eval $cmd_str
       ;;
     u)
-      # Find docker-compose.yml (required for up command)
-      local compose_file
-      compose_file=$(find_compose_file)
-      if [[ -z "$compose_file" ]]; then
-        echo "Error: No docker-compose.yml or compose.yml found in current directory or parent directories."
-        return 1
+      # If no container pattern, up all services
+      if [[ -z "$container_pattern" ]]; then
+        cmd_str="docker compose up -d ${additional_flags[@]}"
+        eval "$cmd_str"
+      else
+        # Otherwise get specific service
+        local selected_service
+        selected_service=$(get_compose_service "$container_pattern") || return 1
+        
+        cmd_str="docker compose up -d $selected_service ${additional_flags[@]}"
+        eval "$cmd_str"
       fi
-      
-      local selected_service
-      selected_service=$(get_compose_service "$container_pattern") || return 1
-      
-      cmd_str="docker compose up -d $selected_service"
-      eval $cmd_str
       ;;
     ps)
       # Process optional flags
@@ -264,7 +286,6 @@ d() {
       if [[ -n "$container_pattern" ]]; then
         docker_cmd="$docker_cmd | grep -i $container_pattern"
       fi
-      
       eval $docker_cmd | while IFS='|' read -r id name container_status image ports; do
         # Determine color based on container_status
         local status_color=$COLOR_GRAY

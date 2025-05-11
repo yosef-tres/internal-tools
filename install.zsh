@@ -73,16 +73,38 @@ find_utils_files() {
 
 # Try GitHub download first
 if [ "$LOCAL_INSTALL" = false ]; then
-  # Download list of files from GitHub repo
-  print_info "Downloading from GitHub repository..."
-  # Start with known utility: docker-utils.zsh
-  if download_file "${GITHUB_REPO}/utils/docker-utils.zsh" "${UTILS_DIR}/docker-utils.zsh"; then
-    DOWNLOAD_SUCCESS=true
-    # Try to find other utility files by checking common ones
-    COMMON_UTILS=("git" "aws" "k8s" "terraform")
-    for util in "${COMMON_UTILS[@]}"; do
-      download_file "${GITHUB_REPO}/utils/${util}-utils.zsh" "${UTILS_DIR}/${util}-utils.zsh" 2>/dev/null || true
-    done
+  # Download all utility files from GitHub repo
+  print_info "Downloading all utility files from GitHub repository..."
+  
+  # GitHub repo details
+  GITHUB_OWNER="yosef-tres"
+  GITHUB_REPO_NAME="zsh-tools"
+  GITHUB_PATH="utils"
+  
+  # Use GitHub API to get contents of the utils directory
+  print_info "Retrieving utility files list from GitHub..."
+  if command -v curl >/dev/null 2>&1; then
+    # Get directory listing with curl and extract filenames ending with -utils.zsh
+    # This will work even without authentication for public repos
+    FILES_JSON=$(curl -s "https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO_NAME}/contents/${GITHUB_PATH}")
+    
+    # Make sure we got a valid response
+    if echo "$FILES_JSON" | grep -q "name"; then
+      print_info "Found utility files, downloading..."
+      
+      # Extract filenames and download each one
+      echo "$FILES_JSON" | grep -o '"name":"[^"]*-utils\.zsh"' | cut -d '"' -f 4 | while read -r file; do
+        print_info "Downloading $file..."
+        if download_file "${GITHUB_REPO}/utils/${file}" "${UTILS_DIR}/${file}" 2>/dev/null; then
+          print_success "Downloaded $file"
+          DOWNLOAD_SUCCESS=true
+        fi
+      done
+    else
+      print_warning "Could not retrieve utils directory listing from GitHub API. Response: ${FILES_JSON}"
+    fi
+  else
+    print_warning "curl not available, falling back to local install method"
   fi
 fi
 
@@ -102,7 +124,7 @@ if [ "$DOWNLOAD_SUCCESS" = false ]; then
 fi
 
 # Check if installation was successful
-if [ "$DOWNLOAD_SUCCESS" = false ] || [ ! -f "${UTILS_DIR}/docker-utils.zsh" ]; then
+if [ "$DOWNLOAD_SUCCESS" = false ] || [ ! "$(ls -A "${UTILS_DIR}" 2>/dev/null)" ]; then
   print_error "Failed to install utility files."
   exit 1
 fi

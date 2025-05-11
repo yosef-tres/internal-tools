@@ -63,21 +63,46 @@ print_info "Downloading utility files..."
 
 # Try to download from GitHub
 LOCAL_INSTALL=false
-download_file "${GITHUB_REPO}/utils/docker-utils.zsh" "${UTILS_DIR}/docker-utils.zsh" || {
-  # If download fails and we're running the script from a local repo, copy files directly
-  SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-  if [ -f "${SCRIPT_DIR}/utils/docker-utils.zsh" ]; then
-    print_warning "GitHub download failed, using local files instead..."
-    cp "${SCRIPT_DIR}/utils/docker-utils.zsh" "${UTILS_DIR}/docker-utils.zsh"
-    LOCAL_INSTALL=true
-  else
-    print_error "Failed to download utility files and no local files found."
-    exit 1
-  fi
+DOWNLOAD_SUCCESS=false
+
+# Function to find all utility files in the directory
+find_utils_files() {
+  local dir="$1"
+  find "$dir" -type f -name "*-utils.zsh"
 }
 
+# Try GitHub download first
+if [ "$LOCAL_INSTALL" = false ]; then
+  # Download list of files from GitHub repo
+  print_info "Downloading from GitHub repository..."
+  # Start with known utility: docker-utils.zsh
+  if download_file "${GITHUB_REPO}/utils/docker-utils.zsh" "${UTILS_DIR}/docker-utils.zsh"; then
+    DOWNLOAD_SUCCESS=true
+    # Try to find other utility files by checking common ones
+    COMMON_UTILS=("git" "aws" "k8s" "terraform")
+    for util in "${COMMON_UTILS[@]}"; do
+      download_file "${GITHUB_REPO}/utils/${util}-utils.zsh" "${UTILS_DIR}/${util}-utils.zsh" 2>/dev/null || true
+    done
+  fi
+fi
+
+# If GitHub download failed or we're running locally
+if [ "$DOWNLOAD_SUCCESS" = false ]; then
+  # If download fails and we're running the script from a local repo, copy files directly
+  SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+  if [ -d "${SCRIPT_DIR}/utils" ]; then
+    print_warning "GitHub download failed, using local files instead..."
+    # Find all utility files and copy them
+    for util_file in $(find_utils_files "${SCRIPT_DIR}/utils"); do
+      cp "$util_file" "${UTILS_DIR}/$(basename "$util_file")"
+      DOWNLOAD_SUCCESS=true
+    done
+    LOCAL_INSTALL=true
+  fi
+fi
+
 # Check if installation was successful
-if [ ! -f "${UTILS_DIR}/docker-utils.zsh" ]; then
+if [ "$DOWNLOAD_SUCCESS" = false ] || [ ! -f "${UTILS_DIR}/docker-utils.zsh" ]; then
   print_error "Failed to install utility files."
   exit 1
 fi
@@ -90,7 +115,12 @@ print_success "Utility files downloaded successfully."
 # Update .zshrc to source the utilities
 ZSHRC="${HOME}/.zshrc"
 SOURCE_LINE="# Source ZSH Tools"
-TOOLS_SOURCE_LINE='source "${HOME}/.zsh-tools/utils/docker-utils.zsh"'
+
+# Create a source block for all utility files
+TOOLS_SOURCE_BLOCK="# Source ZSH Tools\n"
+TOOLS_SOURCE_BLOCK+="for util_file in \"\${HOME}/.zsh-tools/utils\"/*-utils.zsh; do\n"
+TOOLS_SOURCE_BLOCK+="  source \"\$util_file\"\n"
+TOOLS_SOURCE_BLOCK+="done"
 
 # Check if .zshrc exists
 if [ ! -f "$ZSHRC" ]; then

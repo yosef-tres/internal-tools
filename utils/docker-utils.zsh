@@ -74,16 +74,20 @@ d() {
 
     # If multiple containers found, show menu
     if [[ ${#containers[@]} -gt 1 ]]; then
-      echo "Multiple containers found. Please select one:"
       select container in "${containers[@]}"; do
         if [[ -n "$container" ]]; then
-          selected_container=$container
+          # Use the exact container name that was selected
+          selected_container="$container"
+          break
+        elif [[ -n "$REPLY" ]] && [[ "$REPLY" =~ ^[0-9]+$ ]] && [[ "$REPLY" -le ${#containers[@]} ]] && [[ "$REPLY" -gt 0 ]]; then
+          # Handle numeric selection - convert to 1-based index for ZSH arrays
+          selected_container="${containers[$REPLY]}"
           break
         fi
       done
     else
       # If only one container found
-      selected_container=${containers[1]}
+      selected_container="${containers[1]}"
     fi
 
     # Validate container selection
@@ -92,6 +96,7 @@ d() {
       return 1
     fi
     
+    # Return the selected container name
     echo "$selected_container"
   }
 
@@ -142,6 +147,7 @@ d() {
   # Execute the appropriate command based on the option
   case "$cmd" in
     e)
+      # Get container selection first, silently
       local selected_container
       selected_container=$(get_docker_container "$container_pattern") || return 1
       
@@ -149,45 +155,55 @@ d() {
       eval $cmd_str
       ;;
     l)
+      # Get container selection first, silently
       local selected_container
       selected_container=$(get_docker_container "$container_pattern") || return 1
       
-      # Use a macOS-compatible approach for timestamps without -f flag
-      # Using direct execution instead of eval to avoid quoting issues
-      docker logs --tail=100 $selected_container | while IFS= read -r line; do
+      # Get logs into a temporary file first
+      local tmpfile=$(mktemp)
+      docker logs --tail=100 "$selected_container" > "$tmpfile" 2>/dev/null
+      
+      # Add timestamps to each line
+      while IFS= read -r line; do
         printf "%s %s\n" "$(date +"%H:%M:%S")" "$line"
-      done
+      done < "$tmpfile"
+      
+      # Clean up
+      rm -f "$tmpfile"
       ;;
     lf)
+      # Get container selection first, silently
       local selected_container
       selected_container=$(get_docker_container "$container_pattern") || return 1
       
-      # Use a macOS-compatible approach for timestamps with -f flag (follow logs)
-      # Using direct execution instead of eval to avoid quoting issues
-      docker logs -f --tail=100 $selected_container | while IFS= read -r line; do
+      # Use direct command with proper quoting
+      # For follow mode we can't use a temp file, so we pipe directly
+      docker logs -f --tail=100 "$selected_container" 2>/dev/null | while IFS= read -r line; do
         printf "%s %s\n" "$(date +"%H:%M:%S")" "$line"
       done
       ;;
     s)
+      # Get container selection first, silently
       local selected_container
       selected_container=$(get_docker_container "$container_pattern") || return 1
       
+      echo "Stopping container $selected_container..."
       # Stop the container
-      docker stop $selected_container
+      docker stop "$selected_container"
       ;;
     r)
+      # Get container selection first, silently
       local selected_container
       selected_container=$(get_docker_container "$container_pattern") || return 1
       
-      # Restart the container
-      docker restart $selected_container
+      docker restart "$selected_container"
       ;;
     t)
+      # Get container selection first, silently
       local selected_container
       selected_container=$(get_docker_container "$container_pattern") || return 1
       
-      # Start the container
-      docker start $selected_container
+      docker start "$selected_container"
       ;;
     d)
       # Find docker-compose.yml (required for down command)

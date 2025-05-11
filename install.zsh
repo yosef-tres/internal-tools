@@ -130,16 +130,29 @@ fi
 
 # Check if source line already exists and update it
 if grep -q "source.*zsh-tools" "$ZSHRC"; then
-  print_info "Updating existing ZSH Tools source line in .zshrc..."
-  # Use sed to replace existing source line
-  sed -i.bak -E "s|source.*zsh-tools.*|${TOOLS_SOURCE_LINE}|g" "$ZSHRC"
+  print_info "Updating existing ZSH Tools source in .zshrc..."
+  # Remove any existing ZSH Tools source lines
+  sed -i.bak '/source.*zsh-tools/d' "$ZSHRC"
+  sed -i.bak '/Source ZSH Tools/d' "$ZSHRC"
+  sed -i.bak '/for util_file in.*zsh-tools.*utils/d' "$ZSHRC"
+  sed -i.bak '/done/d' "$ZSHRC"
   rm -f "${ZSHRC}.bak"
-else
-  # Add source line to .zshrc
-  print_info "Adding ZSH Tools source line to .zshrc..."
+  
+  # Add new source block
+  print_info "Adding new ZSH Tools source block to .zshrc..."
   echo "" >> "$ZSHRC"
   echo "$SOURCE_LINE" >> "$ZSHRC"
-  echo "$TOOLS_SOURCE_LINE" >> "$ZSHRC"
+  echo "for util_file in \"\${HOME}/.zsh-tools/utils\"/*-utils.zsh; do" >> "$ZSHRC"
+  echo "  source \"\$util_file\"" >> "$ZSHRC"
+  echo "done" >> "$ZSHRC"
+else
+  # Add source block to .zshrc
+  print_info "Adding ZSH Tools source block to .zshrc..."
+  echo "" >> "$ZSHRC"
+  echo "$SOURCE_LINE" >> "$ZSHRC"
+  echo "for util_file in \"\${HOME}/.zsh-tools/utils\"/*-utils.zsh; do" >> "$ZSHRC"
+  echo "  source \"\$util_file\"" >> "$ZSHRC"
+  echo "done" >> "$ZSHRC"
 fi
 
 print_success "Installation complete!"

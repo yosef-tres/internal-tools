@@ -1,28 +1,49 @@
-#!/bin/zsh
+function chpwd() {
+    local GREEN='\033[0;32m'
+    local RED='\033[0;31m'
+    local NC='\033[0m'
 
-function cd() {
-    builtin cd "$@"
+    local dir="$PWD"
+    local found_venv=""
+    local venv_activate=""
+    local realpath_cmd
 
-    if [ -z "$VIRTUAL_ENV" ]; then
-        # If env folder is found then activate the virtualenv
-        if [ -d ./.venv ]; then
-            source ./.venv/bin/activate
+    if command -v realpath &>/dev/null; then
+        realpath_cmd="realpath"
+    else
+        realpath_cmd="python3 -c 'import os,sys; print(os.path.realpath(sys.argv[1]))'"
+    fi
+
+    # Search upwards for nearest .venv
+    while [ "$dir" != "/" ]; do
+        if [ -f "$dir/.venv/bin/activate" ]; then
+            found_venv="$($realpath_cmd "$dir/.venv")"
+            venv_activate="$found_venv/bin/activate"
+            break
+        fi
+        dir="$(dirname "$dir")"
+    done
+
+    # Normalize current VIRTUAL_ENV
+    local current_venv=""
+    if [ -n "$VIRTUAL_ENV" ]; then
+        current_venv="$($realpath_cmd "$VIRTUAL_ENV" 2>/dev/null || echo "")"
+    fi
+
+    # Decide action
+    if [ -n "$current_venv" ]; then
+        if [ -z "$found_venv" ]; then
+            deactivate
+            echo "${RED}Deactivated virtualenv${NC}"
+        elif [ "$found_venv" != "$current_venv" ]; then
+            deactivate
+            source "$venv_activate"
+            echo "Switched to virtualenv: ${GREEN}$found_venv${NC}"
         fi
     else
-        # Check if the current folder belongs to earlier VIRTUAL_ENV folder
-        # If yes then do nothing, else deactivate
-        parentdir="$(dirname "$VIRTUAL_ENV")"
-        if [[ "$PWD"/ != "$parentdir"/* ]]; then
-            deactivate
-            if [ -d ./.venv ]; then
-                source ./.venv/bin/activate
-                GREEN='\033[0;32m'  # Green color
-                NC='\033[0m'        # No color (reset)
-
-                # Construct the string with colors
-                EXEC="$(pwd)/.venv/bin/activate"
-                printf "Switch venv to ${GREEN}$EXEC${NC}\n"
-            fi
+        if [ -n "$found_venv" ]; then
+            source "$venv_activate"
+            echo "Activated virtualenv: ${GREEN}$found_venv${NC}"
         fi
     fi
 }

@@ -14,6 +14,7 @@
 #   ps  - show container status (use -a to include stopped)
 
 # Shortcuts
+unalias dps 2>/dev/null
 alias dps='d ps'
 alias du='d u'
 alias dd='d d'

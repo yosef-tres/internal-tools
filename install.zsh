@@ -4,6 +4,7 @@
 # Author: Yosef Abraham
 # Usage: curl -fsSL https://raw.githubusercontent.com/yosef-tres/zsh-tools/main/install.zsh | zsh
 
+# ─────────────────────────────────────────────────────────────
 # Color definitions
 COL_GREEN="\033[0;32m"
 COL_YELLOW="\033[0;33m"

@@ -1,0 +1,17 @@
+{
+	"folders": [
+		{
+			"name": "fdc",
+			"path": "dbg-tools/fdc"
+		},
+		{
+			"name": "zsh-utils",
+			"path": "zsh-utils"
+		},
+		{
+			"name": "internal-tools",
+			"path": "."
+		}
+	],
+	"settings": {}
+}

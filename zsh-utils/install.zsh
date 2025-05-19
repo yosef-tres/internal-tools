@@ -15,7 +15,7 @@ COL_RESET="\033[0m"
 # ─────────────────────────────────────────────────────────────
 # Constants
 ZSH_TOOLS_DIR="$HOME/.zsh-utils"
-ZSHRC="$HOME/.zshrc"
+ZPROFILE="$HOME/.zprofile"
 GITHUB_USER="yosef-tres"
 GITHUB_REPO="internal-tools"
 GITHUB_ZIP_URL="https://github.com/$GITHUB_USER/$GITHUB_REPO/archive/refs/heads/main.zip"
@@ -59,11 +59,11 @@ source_utilities() {
   done
 }
 
-add_to_zshrc() {
-  grep -q '# Source ZSH Tools' "$ZSHRC" && return
+add_to_zprofile() {
+  grep -q '# Source ZSH Tools' "$ZPROFILE" && return
 
-  print_msg info "Adding source block to .zshrc..."
-  cat >> "$ZSHRC" <<EOF
+  print_msg info "Adding source block to .zprofile..."
+  cat >> "$ZPROFILE" <<EOF
 
 # Source ZSH Tools
 for util_file in "\$HOME/.zsh-utils"/*-utils.zsh(N); do

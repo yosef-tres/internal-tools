@@ -4,18 +4,18 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import random
-from fdc.data import get_db_tables
-from fdc.db.session import conn
 
 def render_sidebar():
+    conn = st.connection('sql')
     """Render the sidebar with database explorer and stats."""
     with st.sidebar:
         st.header("Database Explorer")
-        tables = get_db_tables()
-        
+        # Get tables dynamically from `Base`
+        from fdc.db.models import Base
+        tables = [table for table in Base.metadata.tables]
         # If the selected_table is not yet in session_state, initialize it
         if "selected_table" not in st.session_state:
-            st.session_state.selected_table = "collections"
+            st.session_state.selected_table = "collection"
             
         # Create the table selector
         selected_table = st.selectbox(
@@ -33,7 +33,7 @@ def render_sidebar():
             with conn.session as s:
                 from fdc.db.models import Collection, CollectionPart
                 collection_count = s.query(Collection).count()
-                st.metric("Collections", f"{collection_count:,}")
+                st.metric("Collection", f"{collection_count:,}")
         
         with col2:
             # Show real parts count if database session is available

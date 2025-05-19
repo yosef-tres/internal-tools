@@ -26,8 +26,3 @@ Base = declarative_base()
 # Create sessionmaker
 
 Session = sessionmaker(engine)
-
-with Session() as session:
-    session.execute(text("SELECT 1"))
-
-conn = st.connection('internal_tools_db', type='sql')

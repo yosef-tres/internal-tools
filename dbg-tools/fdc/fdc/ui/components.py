@@ -2,9 +2,7 @@
 
 import streamlit as st
 import pandas as pd
-from datetime import datetime
-import random
-from fdc.data import get_mock_transactions, get_mock_entities
+from fdc.db.models import Collection, CollectionPart
 
 def render_status_indicator(status, stage_name):
     """Render a status indicator for a process stage."""
@@ -42,22 +40,68 @@ def render_process_controls(stage_name, status):
 def render_db_viewer(selected_table):
     """Render the database viewer component."""
     st.subheader(f"Database Table: {selected_table}")
+
+    conn = st.connection('sql')
     
-    # Mock data based on selected table
-    if selected_table == "transactions":
-        data = pd.DataFrame(get_mock_transactions(20))
-    elif selected_table == "entities":
-        data = pd.DataFrame(get_mock_entities(15))
-    elif selected_table == "addresses":
-        data = pd.DataFrame(get_mock_entities(10))
+    if selected_table == "collection":
+        with conn.session as s:
+            data = s.query(Collection).all()
+            if data:
+                # Convert to pandas DataFrame, expand with nice columns
+                data = pd.DataFrame([item.__dict__ for item in data])
+                st.info("Asdfsad")
+                # Remove SQLAlchemy internal state column
+                if '_sa_instance_state' in data.columns:
+                    data = data.drop('_sa_instance_state', axis=1)
+                # Select and reorder columns
+                data = data[['id', 'name', 'description', 'created_at', 'updated_at']]
+            else:
+                st.info("No collections found.")
+    elif selected_table == "collection_part":
+        collection_id = st.number_input("Collection ID", min_value=1, value=1)
+        with conn.session as s:
+            # Verify collection exists
+            collection = s.query(Collection).filter(Collection.id == collection_id).first()
+            if collection:
+                st.write(f"Viewing parts for collection: {collection.name}")
+                data = s.query(CollectionPart).filter(CollectionPart.collection_id == collection_id).all()
+                if data:
+                    # Convert SQLAlchemy objects to dict first for cleaner DataFrame conversion
+                    data = pd.DataFrame([item.__dict__ for item in data])
+                    # Remove SQLAlchemy internal state column
+                    if '_sa_instance_state' in data.columns:
+                        data = data.drop('_sa_instance_state', axis=1)
+                    # Select and reorder columns
+                    data = data[['id', 'collection_id', 'name', 'content', 'data', 'order', 'created_at', 'updated_at']]
+                else:
+                    st.info(f"No parts found for collection ID {collection_id}")
+            else:
+                st.error(f"Collection with ID {collection_id} not found")
     else:
-        # Generic mock data for other tables
-        data = pd.DataFrame({
-            "id": [f"ID-{i}" for i in range(10)],
-            "created_at": [datetime.now().strftime("%Y-%m-%d %H:%M:%S") for _ in range(10)],
-            "field1": [f"Value {random.randint(1, 100)}" for _ in range(10)],
-            "field2": [random.choice(["Active", "Inactive", "Pending"]) for _ in range(10)],
-        })
+        # Display not supported table message
+        st.info(f"Table {selected_table} not supported.")
+    # Check if we have data to display
+    if isinstance(data, pd.DataFrame) and not data.empty:
+        # Format datetime columns for better display
+        for col in data.columns:
+            if pd.api.types.is_datetime64_any_dtype(data[col]):
+                data[col] = data[col].dt.strftime('%Y-%m-%d %H:%M:%S')
+        
+        # Display as a styled table with highlighting and sorting
+        st.dataframe(
+            data,
+            use_container_width=True,
+            column_config={
+                # Customize column display as needed
+                'id': st.column_config.NumberColumn('ID', format='%d'),
+                'created_at': st.column_config.DatetimeColumn('Created'),
+                'updated_at': st.column_config.DatetimeColumn('Updated'),
+                'description': st.column_config.TextColumn('Description', width='large')
+            },
+            hide_index=True
+        )
+    elif isinstance(data, pd.DataFrame):
+        st.info(f"No data available for {selected_table}")
     
     # Table filters (basic functionality)
     with st.expander("Table Filters"):
@@ -72,8 +116,7 @@ def render_db_viewer(selected_table):
             st.date_input("From Date:")
             st.date_input("To Date:")
     
-    # Show table data with pagination controls
-    st.dataframe(data, use_container_width=True)
+    
     
     # Pagination UI (placeholder for actual pagination)
     col1, col2, col3 = st.columns([1, 1, 1])

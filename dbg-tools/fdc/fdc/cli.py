@@ -3,6 +3,7 @@
 
 import subprocess
 import sys
+from pathlib import Path
 import webbrowser
 
 import click
@@ -34,8 +35,6 @@ def serve():
     click.echo("Starting FDC server on 0.0.0.0:8501")
     
     # Import here to avoid circular imports
-    import subprocess
-    import sys
     from pathlib import Path
     
     # Get the path to the app.py file

@@ -1,5 +1,6 @@
 """Streamlit app for Fast & Dirty Commit - Blockchain Transaction Processing."""
 
+import json
 import streamlit as st
 
 # Import UI components from our modular structure - only importing what we use directly in this file
@@ -13,8 +14,7 @@ from fdc.ui import (
 )
 
 # Import database functionality
-from fdc.db.session import conn
-from fdc.db.models import Collection
+from fdc.db.models import Collection, CollectionPart
 
 
 def app():
@@ -25,6 +25,8 @@ def app():
         page_icon="",
         layout="wide",
     )
+
+    conn = st.connection('sql')
     
     # Initialize session state
     initialize_session_state()
@@ -38,12 +40,24 @@ def app():
     
     # For demonstration purposes, create a sample collection if none exist
     with conn.session as s:
-        collections = s.query(Collection).all()
-        if not collections:
-            st.info("Creating a sample collection...")
-            from fdc.data import create_sample_collection
-            sample = create_sample_collection(db, name="Sample Collection", description="A demonstration collection")
-            st.success(f"Created sample collection: {sample.name} with {len(sample.parts)} parts")
+        # Create a Collection with 5 Collection Parts and commit to DB, if There are not already collections
+        if not s.query(Collection).count():
+            collection = Collection(name="Sample Collection", description="A demonstration collection")
+            s.add(collection)
+            s.commit()
+            
+            # Create 5 Collection Parts and commit to DB
+            for i in range(5):
+                collection_part = CollectionPart(
+                    collection_id=collection.id,
+                    name=f"Part {i+1}",
+                    content=f"Sample content for the part {i+1}",
+                    data=json.dumps({"type": "sample", "version": "1.0"}),
+                    order=i
+                )
+                s.add(collection_part)
+            s.commit()
+        
     
     # Main content - Three-legged process
     col1, col2 = st.columns([2, 3])
@@ -60,34 +74,7 @@ def app():
     # Right column - DB Viewer
     with col2:
         # Display different views based on the selected table
-        if st.session_state.selected_table == "collections":
-            st.subheader("Collections")
-            with conn.session as s:
-                from fdc.data import get_collections_data
-                collections_data = get_collections_data(s)
-                if collections_data:
-                    st.dataframe(collections_data)
-                else:
-                    st.info("No collections found.")
-        elif st.session_state.selected_table == "collection_parts":
-            st.subheader("Collection Parts")
-            collection_id = st.number_input("Collection ID", min_value=1, value=1)
-            with conn.session as s:
-                # Verify collection exists
-                collection = s.query(Collection).filter(Collection.id == collection_id).first()
-                if collection:
-                    st.write(f"Viewing parts for collection: {collection.name}")
-                    from fdc.data import get_collection_parts_data
-                    parts_data = get_collection_parts_data(s, collection_id)
-                    if parts_data:
-                        st.dataframe(parts_data)
-                    else:
-                        st.info(f"No parts found for collection ID {collection_id}")
-                else:
-                    st.error(f"Collection with ID {collection_id} not found")
-        else:
-            # For backward compatibility with any other tables
-            render_db_viewer(st.session_state.selected_table)
+        render_db_viewer(st.session_state.selected_table)
     
     # Auto-increment progress for running processes
     update_progress()
@@ -104,7 +91,7 @@ def initialize_session_state():
     if "progress" not in st.session_state:
         st.session_state.progress = {"collect": 0, "enrich": 0, "build": 0}
     if "selected_table" not in st.session_state:
-        st.session_state.selected_table = "collections"
+        st.session_state.selected_table = "collection"
     if "db_session" not in st.session_state:
         st.session_state.db_session = None
 

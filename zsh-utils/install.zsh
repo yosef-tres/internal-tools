@@ -2,7 +2,7 @@
 
 # ZSH Tools Installer
 # Author: Yosef Abraham
-# Usage: curl -fsSL https://raw.githubusercontent.com/yosef-tres/zsh-tools/main/install.zsh | zsh
+# Usage: curl -fsSL https://raw.githubusercontent.com/yosef-tres/internal-tools/main/zsh-utils/install.zsh | zsh
 
 # ─────────────────────────────────────────────────────────────
 # Color definitions
@@ -14,11 +14,10 @@ COL_RESET="\033[0m"
 
 # ─────────────────────────────────────────────────────────────
 # Constants
-ZSH_TOOLS_DIR="$HOME/.zsh-tools"
-UTILS_DIR="$ZSH_TOOLS_DIR/utils"
+ZSH_TOOLS_DIR="$HOME/.zsh-utils"
 ZSHRC="$HOME/.zshrc"
 GITHUB_USER="yosef-tres"
-GITHUB_REPO="zsh-tools"
+GITHUB_REPO="internal-tools"
 GITHUB_ZIP_URL="https://github.com/$GITHUB_USER/$GITHUB_REPO/archive/refs/heads/main.zip"
 GITHUB_CLONE_URL="https://github.com/$GITHUB_USER/$GITHUB_REPO.git"
 
@@ -55,7 +54,7 @@ safe_download() {
 }
 
 source_utilities() {
-  for util_file in "$UTILS_DIR"/*-utils.zsh(N); do
+  for util_file in "$ZSH_TOOLS_DIR"/*-utils.zsh(N); do
     source "$util_file"
   done
 }
@@ -67,7 +66,7 @@ add_to_zshrc() {
   cat >> "$ZSHRC" <<EOF
 
 # Source ZSH Tools
-for util_file in "\$HOME/.zsh-tools/utils"/*-utils.zsh(N); do
+for util_file in "\$HOME/.zsh-utils"/*-utils.zsh(N); do
   source "\$util_file"
 done
 EOF
@@ -78,8 +77,8 @@ install_from_git() {
   command -v git >/dev/null || return 1
   local temp_dir=$(mktemp -d)
   git clone --depth=1 "$GITHUB_CLONE_URL" "$temp_dir" >/dev/null 2>&1 || return 1
-  [[ -d "$temp_dir/utils" ]] || return 1
-  cp -r "$temp_dir/utils"/* "$UTILS_DIR/" || return 1
+  [[ -d "$temp_dir/zsh-utils" ]] || return 1
+  cp -r "$temp_dir/zsh-utils"/* "$ZSH_TOOLS_DIR/" || return 1
   rm -rf "$temp_dir"
   return 0
 }
@@ -93,16 +92,16 @@ install_from_zip() {
   curl -fsSL "$GITHUB_ZIP_URL" -o "$zip_file" || return 1
   unzip -q "$zip_file" -d "$temp_dir" || return 1
   local extract_dir=$(find "$temp_dir" -type d -name "$GITHUB_REPO-*" | head -n1)
-  [[ -d "$extract_dir/utils" ]] || return 1
-  cp -r "$extract_dir/utils"/* "$UTILS_DIR/" || return 1
+  [[ -d "$extract_dir/zsh-utils" ]] || return 1
+  cp -r "$extract_dir/zsh-utils"/* "$ZSH_TOOLS_DIR/" || return 1
   rm -rf "$temp_dir"
   return 0
 }
 
 install_from_local() {
   local script_dir="$(cd -- "$(dirname "$0")" && pwd)"
-  [[ -d "$script_dir/utils" ]] || return 1
-  cp "$script_dir/utils"/* "$UTILS_DIR/" || return 1
+  [[ -d "$script_dir" ]] || return 1
+  cp "$script_dir"/* "$ZSH_TOOLS_DIR/" || return 1
   print_msg warn "Installed from local directory."
   return 0
 }
@@ -112,10 +111,10 @@ install_from_local() {
 ensure_zsh
 
 print_msg info "Installing ZSH Tools to $ZSH_TOOLS_DIR..."
-mkdir -p "$UTILS_DIR"
+mkdir -p "$ZSH_TOOLS_DIR"
 
 if install_from_git || install_from_zip || install_from_local; then
-  chmod +x "$UTILS_DIR"/*.zsh(N)
+  chmod +x "$ZSH_TOOLS_DIR"/*.zsh(N)
   print_msg success "Utility scripts installed."
 else
   abort "All download methods failed."
@@ -131,4 +130,3 @@ fi
 print_msg success "Installation complete!"
 print_msg info "To activate now: source $ZSHRC"
 print_msg info "Or just restart your terminal."
-

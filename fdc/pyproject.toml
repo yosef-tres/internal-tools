@@ -1,0 +1,25 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "fdc"
+version = "0.1.0"
+description = "Fast & Dirty Commit - A quick way to commit and serve changes"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [
+    { name = "Yosef Abraham", email = "yosef@tres.com" }
+]
+dependencies = [
+    "streamlit>=1.22.0",
+    "gitpython>=3.1.30",
+    "click>=8.1.3",
+]
+
+[project.scripts]
+fdc = "fdc.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["fdc"]

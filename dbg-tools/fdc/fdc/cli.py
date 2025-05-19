@@ -65,6 +65,73 @@ def main():
         click.echo(f"Error: {e}", err=True)
         sys.exit(1)
 
+# Migration-related commands
+@cli.group()
+def migrate():
+    """Database migration commands (similar to npm run)."""
+    pass
+
+
+@migrate.command("new")
+@click.argument("message")
+def create_migration(message):
+    """Create a new migration (alembic revision --autogenerate)."""
+    click.echo(f"Creating new migration: {message}")
+    subprocess.run(
+        ["alembic", "revision", "--autogenerate", "-m", message],
+        cwd=str(Path(__file__).parent.parent)
+    )
+
+
+@migrate.command("up")
+@click.option("--revision", default="head", help="Migration revision to upgrade to (default: head)")
+def upgrade(revision):
+    """Upgrade database to specified revision (alembic upgrade)."""
+    click.echo(f"Upgrading database to revision: {revision}")
+    subprocess.run(
+        ["alembic", "upgrade", revision],
+        cwd=str(Path(__file__).parent.parent)
+    )
+
+
+@migrate.command("down")
+@click.option("--revision", default="-1", help="Number of revisions to downgrade (default: -1)")
+def downgrade(revision):
+    """Downgrade database by specified number of revisions (alembic downgrade)."""
+    click.echo(f"Downgrading database by {revision}")
+    subprocess.run(
+        ["alembic", "downgrade", revision],
+        cwd=str(Path(__file__).parent.parent)
+    )
+
+
+@migrate.command("history")
+@click.option("--verbose", "-v", is_flag=True, help="Show detailed information")
+def history(verbose):
+    """Show migration history (alembic history)."""
+    click.echo("Migration history:")
+    cmd = ["alembic", "history"]
+    if verbose:
+        cmd.append("--verbose")
+    subprocess.run(
+        cmd,
+        cwd=str(Path(__file__).parent.parent)
+    )
+
+
+@migrate.command("current")
+@click.option("--verbose", "-v", is_flag=True, help="Show detailed information")
+def current(verbose):
+    """Show current migration version (alembic current)."""
+    click.echo("Current migration version:")
+    cmd = ["alembic", "current"]
+    if verbose:
+        cmd.append("--verbose")
+    subprocess.run(
+        cmd,
+        cwd=str(Path(__file__).parent.parent)
+    )
+
 
 if __name__ == "__main__":
     main()

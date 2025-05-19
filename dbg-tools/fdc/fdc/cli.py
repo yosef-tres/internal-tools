@@ -48,7 +48,9 @@ def serve():
         "--server.address", '0.0.0.0',
         "--server.port", str(8501),
         "--server.headless", "true",
-        "--browser.serverAddress", "dbg.dev.local"
+        "--browser.baseUrlPath", "/fdc",
+        "--browser.serverAddress", "dbg.dev.local",
+        ""
     ]
     
     # Execute the Streamlit command
